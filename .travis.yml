@@ -9,7 +9,7 @@ python:
   - 3.5
 
 install:
-  - pip install -q errbot pytest pytest-pep8 pytest-cov coveralls --use-wheel
+  - pip install errbot pytest pytest-pep8 pytest-cov coveralls --use-wheel
   - pip install -qr requirements.txt --use-wheel
 
 script:
