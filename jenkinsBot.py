@@ -8,7 +8,7 @@ from itertools import chain
 from jinja2 import Template
 from jenkins import Jenkins, JenkinsException, LAUNCHER_JNLP
 from errbot import BotPlugin, botcmd, webhook
-from errbot.utils import ValidationException
+from errbot import ValidationException
 
 try:
     from config import JENKINS_URL, JENKINS_USERNAME, JENKINS_PASSWORD
