@@ -248,6 +248,27 @@ class JenkinsBot(BotPlugin):
         """Shortcut for jenkins_build"""
         return self.jenkins_build(mess, args)
 
+    @botcmd
+    def jenkins_unqueue(self, msg, args):
+        """Cancel a queued job.
+        Example !jenkins unqueue foo
+        """
+        self.connect_to_jenkins()
+
+        try:
+            queue = self.jenkins.get_queue_info()
+
+            job = next((job for job in queue if job['task']['name'].lower() == args.lower()), None)
+
+            if job:
+                self.jenkins.cancel_queue(job['id'])
+                return 'Unqueued job {0}'.format(job['task']['name'])
+            else:
+                return 'Could not find job {0}, but found the following: {1}'.format(
+                    args, ', '.join(job['task']['name'] for job in queue))
+        except JenkinsException as e:
+            return 'Oops, {0}'.format(e)
+
     @botcmd(split_args_with=None)
     def jenkins_createjob(self, mess, args):
         """Create a Jenkins Job.
