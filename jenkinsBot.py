@@ -15,8 +15,8 @@ try:
 except ImportError:
     # Default mandatory configuration
     JENKINS_URL = ''
-    JENKINS_USERNAME = ''
-    JENKINS_PASSWORD = ''
+    JENKINS_USERNAME = None
+    JENKINS_PASSWORD = None
 
 try:
     from config import (JENKINS_RECEIVE_NOTIFICATION,
