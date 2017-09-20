@@ -151,7 +151,7 @@ class JenkinsBot(BotPlugin):
             if c == 'URL':
                 if not validators.url(v):
                     raise ValidationException('JENKINS_URL is not a well formed URL')
-            elif c in ['USERNAME', 'PASSWORD', 'RECEIVE_NOTIFICATION']:
+            elif c in ['RECEIVE_NOTIFICATION']:
                 if len(v) == 0 or not isinstance(v, str):
                     raise ValidationException("{} is a required string config setting".format(c))
             elif c in ['CHATROOMS_NOTIFICATION']:
