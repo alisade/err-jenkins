@@ -3,12 +3,16 @@ from __future__ import (absolute_import, division,
                         print_function, unicode_literals)
 
 import validators
+import os
 from itertools import chain
+import requests
 
 from jinja2 import Template
 from jenkins import Jenkins, JenkinsException, LAUNCHER_JNLP
 from errbot import BotPlugin, botcmd, webhook
 from errbot import ValidationException
+
+API_TIMEOUT = 5  # Timeout to connect to the AWS metadata service
 
 try:
     from config import JENKINS_URL, JENKINS_USERNAME, JENKINS_PASSWORD
@@ -132,7 +136,6 @@ class JenkinsBot(BotPlugin):
 
     min_err_version = '1.2.1'
     # max_err_version = '4.0.3'
-
     def get_configuration_template(self):
         return CONFIG_TEMPLATE
 
@@ -159,7 +162,8 @@ class JenkinsBot(BotPlugin):
                     raise ValidationException("{} should be of type tuple".format(c))
         return
 
-    def connect_to_jenkins(self):
+    def connect_to_jenkins(self, mess):
+        self.set_jenkins_url(mess)
         """Connect to a Jenkins instance using configuration."""
         self.log.debug('Connecting to Jenkins ({0})'.format(
             self.config['URL']))
@@ -178,6 +182,20 @@ class JenkinsBot(BotPlugin):
             self.send(self.build_identifier(room), mess)
         return
 
+    def set_jenkins_url(self, mess):
+        """deploy to grid with the same name as the slack channel"""
+        grid = mess.frm.channelname
+        grid = 'alim'
+        domain = os.environ['DOMAIN']
+        url = 'http://slave-' + grid + '.' + domain + ':3000/scripts/jenkins_url'
+        try:
+            resp = requests.get(url, timeout=API_TIMEOUT).json()
+        except requests.exceptions.ConnectTimeout:
+            self.log.warning('Connection timeout to Instance API endpoint')
+            return None
+        else:
+            self.config['URL'] = 'http://' + resp['stdout'][0]
+
     @webhook(r'/jenkins/notification')
     def handle_notification(self, incoming_request):
         if not self.config['RECEIVE_NOTIFICATION']:
@@ -190,14 +208,14 @@ class JenkinsBot(BotPlugin):
     @botcmd
     def jenkins_list(self, mess, args):
         """List all jobs, optionally filter them using a search term."""
-        self.connect_to_jenkins()
+        self.connect_to_jenkins(mess)
         return self.format_jobs([job for job in self.jenkins.get_jobs(folder_depth=None)
             if args.lower() in job['fullname'].lower()])
 
     @botcmd
     def jenkins_running(self, mess, args):
         """List all running jobs."""
-        self.connect_to_jenkins()
+        self.connect_to_jenkins(mess)
 
         jobs = [job for job in self.jenkins.get_jobs()
                 if 'anime' in job['color']]
@@ -209,7 +227,7 @@ class JenkinsBot(BotPlugin):
         if len(args) == 0:
             return 'What Job would you like the parameters for?'
 
-        self.connect_to_jenkins()
+        self.connect_to_jenkins(mess)
 
         job = self.jenkins.get_job_info(args[0])
         if job['actions'][1] != {}:
@@ -229,7 +247,7 @@ class JenkinsBot(BotPlugin):
         if len(args) == 0:  # No Job name
             return 'What job would you like to build?'
 
-        self.connect_to_jenkins()
+        self.connect_to_jenkins(mess)
         params = self.build_parameters(args[1:])
 
         # Is it a parameterized job ?
@@ -253,7 +271,7 @@ class JenkinsBot(BotPlugin):
         """Cancel a queued job.
         Example !jenkins unqueue foo
         """
-        self.connect_to_jenkins()
+        self.connect_to_jenkins(mess)
 
         try:
             queue = self.jenkins.get_queue_info()
@@ -281,7 +299,7 @@ class JenkinsBot(BotPlugin):
             return 'I\'m sorry, I can only create `pipeline` and \
                     `multibranch` jobs.'
 
-        self.connect_to_jenkins()
+        self.connect_to_jenkins(mess)
 
         try:
             if args[0] == 'pipeline':
@@ -310,7 +328,7 @@ class JenkinsBot(BotPlugin):
         if len(args) < 1:  # No job name
             return 'Oops, I need the name of the job you want me to delete.'
 
-        self.connect_to_jenkins()
+        self.connect_to_jenkins(mess)
 
         try:
             self.jenkins.delete_job(args[0])
@@ -327,7 +345,7 @@ class JenkinsBot(BotPlugin):
         if len(args) < 1:  # No job name
             return 'Oops, I need the name of the job you want me to enable.'
 
-        self.connect_to_jenkins()
+        self.connect_to_jenkins(mess)
 
         try:
             self.jenkins.enable_job(args[0])
@@ -344,7 +362,7 @@ class JenkinsBot(BotPlugin):
         if len(args) < 1:  # No job name
             return 'Oops, I need the name of the job you want me to disable.'
 
-        self.connect_to_jenkins()
+        self.connect_to_jenkins(mess)
 
         try:
             self.jenkins.disable_job(args[0])
@@ -362,7 +380,7 @@ class JenkinsBot(BotPlugin):
         if len(args) < 1:  # No node name
             return 'Oops, I need a name and a working dir for your new node.'
 
-        self.connect_to_jenkins()
+        self.connect_to_jenkins(mess)
 
         try:
             self.jenkins.create_node(
@@ -385,7 +403,7 @@ class JenkinsBot(BotPlugin):
         if len(args) < 1:  # No node name
             return 'Oops, I need the name of the node you want me to delete.'
 
-        self.connect_to_jenkins()
+        self.connect_to_jenkins(mess)
 
         try:
             self.jenkins.delete_node(args[0])
@@ -402,7 +420,7 @@ class JenkinsBot(BotPlugin):
         if len(args) < 1:  # No node name
             return 'Oops, I need the name of the node you want me to enable.'
 
-        self.connect_to_jenkins()
+        self.connect_to_jenkins(mess)
 
         try:
             self.jenkins.enable_node(args[0])
@@ -419,7 +437,7 @@ class JenkinsBot(BotPlugin):
         if len(args) < 1:  # No node name
             return 'Oops, I need the name of the node you want me to disable.'
 
-        self.connect_to_jenkins()
+        self.connect_to_jenkins(mess)
 
         try:
             self.jenkins.disable_node(args[0])
