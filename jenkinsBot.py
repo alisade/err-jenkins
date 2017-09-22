@@ -185,7 +185,6 @@ class JenkinsBot(BotPlugin):
     def set_jenkins_url(self, mess):
         """deploy to grid with the same name as the slack channel"""
         grid = mess.frm.channelname
-        grid = 'alim'
         domain = os.environ['DOMAIN']
         url = 'http://slave-' + grid + '.' + domain + ':3000/scripts/jenkins_url'
         try:
