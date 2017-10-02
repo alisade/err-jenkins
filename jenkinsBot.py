@@ -3,6 +3,7 @@ from __future__ import (absolute_import, division,
                         print_function, unicode_literals)
 
 import validators
+import io
 import os
 from itertools import chain
 import requests
@@ -175,8 +176,8 @@ class JenkinsBot(BotPlugin):
     def broadcast(self, mess):
         """Shortcut to broadcast a message to all elligible chatrooms."""
         chatrooms = (self.config['CHATROOMS_NOTIFICATION']
-                     if self.config['CHATROOMS_NOTIFICATION']
-                     else self.bot_config.CHATROOM_PRESENCE)
+                     or self.config['GRID_NOTIFICATION']
+                     or self.bot_config.CHATROOM_PRESENCE)
 
         for room in chatrooms:
             self.send(self.build_identifier(room), mess)
@@ -201,6 +202,12 @@ class JenkinsBot(BotPlugin):
             return 'Notification handling is disabled.'
 
         self.log.debug(repr(incoming_request))
+        # parse incoming request url to find
+        # the grid/channelname to post
+        url = incoming_request['build']['full_url']
+        grid = '#' + url[15:14+(url[15:].find(os.environ['DOMAIN']))] or '#deploy'
+        self.config['GRID_NOTIFICATION'] = ( grid,)
+
         self.broadcast(self.format_notification(incoming_request))
         return
 
@@ -237,6 +244,31 @@ class JenkinsBot(BotPlugin):
             job_param = []
 
         return self.format_params(job_param)
+
+    @botcmd(split_args_with=None)
+    def jenkins_output(self, mess, args):
+        """Fetch latest jenkins buid output for a job."""
+        if len(args) == 0:  # No Job name
+            return 'What job output would you like?'
+
+        self.connect_to_jenkins(mess)
+        job_name = args[0]
+
+        job = self.jenkins.get_job_info(job_name)
+        if job['builds']:
+            last_run_number = job['builds'][0]['number']
+        else:
+            return 'job has not been build yet!'
+
+        try:
+            console_output = self.jenkins.get_build_console_output(job_name, last_run_number)
+        except:
+            return 'could not connect to jenkins'
+        else:
+            stream = io.BytesIO(console_output.encode())
+
+        yield 'Fetching job output....'
+        self.send_stream_request(mess.frm, stream, '{0} build #{1} output'.format(job_name, last_run_number))
 
     @botcmd(split_args_with=None)
     def jenkins_build(self, mess, args):
@@ -488,7 +520,7 @@ Parameter Name: {{p.name}}
     def format_notification(body):
         body['fullname'] = body.get('fullname', body['name'])
         NOTIFICATION_TEMPLATE = Template("""Build #{{build.number}} \
-{{build.status}} for Job {{fullname}} ({{build.full_url}})
+{{build.phase}} {{build.status}} for Job {{fullname}} ({{build.full_url}})
 {% if build.scm %}Based on {{build.scm.url}}/commit/{{build.scm.commit}} \
 ({{build.scm.branch}}){% endif %}""")
         return NOTIFICATION_TEMPLATE.render(body)
