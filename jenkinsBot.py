@@ -4,6 +4,7 @@ from __future__ import (absolute_import, division,
 
 import validators
 import io
+import re
 import os
 from itertools import chain
 import requests
@@ -205,7 +206,8 @@ class JenkinsBot(BotPlugin):
         # parse incoming request url to find
         # the grid/channelname to post
         url = incoming_request['build']['full_url']
-        grid = '#' + url[15:14+(url[15:].find(os.environ['DOMAIN']))] or '#deploy'
+        m = re.match(r'https://master-(.*).' + os.environ['DOMAIN'], url)
+        grid = '#' + m.group(1) or '#deploy'
         self.config['GRID_NOTIFICATION'] = ( grid,)
 
         self.broadcast(self.format_notification(incoming_request))
