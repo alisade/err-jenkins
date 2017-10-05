@@ -1,7 +1,7 @@
 # coding: utf-8
 from __future__ import (absolute_import, division,
                         print_function, unicode_literals)
-
+from xml.etree import ElementTree as et
 import validators
 import io
 import re
@@ -271,6 +271,29 @@ class JenkinsBot(BotPlugin):
 
         yield 'Fetching job output....'
         self.send_stream_request(mess.frm, stream, '{0} build #{1} output'.format(job_name, last_run_number))
+
+    @botcmd(split_args_with=None)
+    def jenkins_branch(self, mess, args):
+        """ set a job git branch/commit id"""
+        if len(args) < 2:  # No Job name or branch
+            return 'missing job name or branch'
+
+        self.connect_to_jenkins(mess)
+        job_name = args[0]
+        branch = args[1]
+        if not self.jenkins.job_exists(job_name):
+            return 'job name is invalid'
+
+        job_xml = self.jenkins.get_job_config(job_name)
+        tree = et.fromstring(job_xml)
+        tree.find('.//hudson.plugins.git.BranchSpec/name').text = branch
+        new_job_xml = et.tostring(tree, encoding='utf-8')
+        try:
+            self.jenkins.reconfig_job(job_name, new_job_xml.decode('utf-8'))
+        except:
+            return 'failed to change the job build branch'
+
+        return job_name + ' branch was successfully changed to ' + branch
 
     @botcmd(split_args_with=None)
     def jenkins_build(self, mess, args):
