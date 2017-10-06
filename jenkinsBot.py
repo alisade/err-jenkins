@@ -211,6 +211,10 @@ class JenkinsBot(BotPlugin):
         self.config['GRID_NOTIFICATION'] = ( grid,)
         job_name = incoming_request['name']
         build_number = incoming_request['build']['number']
+        # #############################################
+        # TO DO
+        # rediscover jenkins it might have changed by now
+        ###############################################
         build_info = self.jenkins.get_build_info(job_name, build_number)
         if build_info['actions'][2].get('lastBuiltRevision'):
             git_commit_id = build_info['actions'][2]['lastBuiltRevision']['SHA1']
