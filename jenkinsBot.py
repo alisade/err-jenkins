@@ -209,6 +209,19 @@ class JenkinsBot(BotPlugin):
         m = re.match(r'https://master-(.*).' + os.environ['DOMAIN'], url)
         grid = '#' + m.group(1) or '#deploy'
         self.config['GRID_NOTIFICATION'] = ( grid,)
+        job_name = incoming_request['name']
+        build_number = incoming_request['build']['number']
+        build_info = self.jenkins.get_build_info(job_name, build_number)
+        if build_info['actions'][2].get('lastBuiltRevision'):
+            git_commit_id = build_info['actions'][2]['lastBuiltRevision']['SHA1']
+            _url = build_info['actions'][2]['remoteUrls'][0]
+            git_url = 'https://devgit.cloudpassage.com/' + \
+                    _url[_url.find('devgit')+7:].replace('_','/')
+            git_branch = build_info['actions'][2]['lastBuiltRevision']['branch'][0]['name']
+            incoming_request['git'] = {}
+            incoming_request['git']['commit'] = git_commit_id
+            incoming_request['git']['url'] = git_url
+            incoming_request['git']['branch'] = git_branch
 
         self.broadcast(self.format_notification(incoming_request))
         return
@@ -547,7 +560,9 @@ Parameter Name: {{p.name}}
         NOTIFICATION_TEMPLATE = Template("""Build #{{build.number}} \
 {{build.phase}} {{build.status}} for Job {{fullname}} ({{build.full_url}})
 {% if build.scm %}Based on {{build.scm.url}}/commit/{{build.scm.commit}} \
-({{build.scm.branch}}){% endif %}""")
+({{build.scm.branch}}){% endif %} \
+{% if git %}Based on {{git.url}}/commit/{{git.commit}} \
+({{git.branch}}){% endif %}""")
         return NOTIFICATION_TEMPLATE.render(body)
 
     @staticmethod
