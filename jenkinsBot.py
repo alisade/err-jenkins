@@ -164,8 +164,8 @@ class JenkinsBot(BotPlugin):
                     raise ValidationException("{} should be of type tuple".format(c))
         return
 
-    def connect_to_jenkins(self, mess):
-        self.set_jenkins_url(mess)
+    def connect_to_jenkins(self, grid):
+        self.set_jenkins_url(grid)
         """Connect to a Jenkins instance using configuration."""
         self.log.debug('Connecting to Jenkins ({0})'.format(
             self.config['URL']))
@@ -184,9 +184,8 @@ class JenkinsBot(BotPlugin):
             self.send(self.build_identifier(room), mess)
         return
 
-    def set_jenkins_url(self, mess):
+    def set_jenkins_url(self, grid):
         """deploy to grid with the same name as the slack channel"""
-        grid = mess.frm.channelname
         domain = os.environ['DOMAIN']
         url = 'http://slave-' + grid + '.' + domain + ':3000/scripts/jenkins_url'
         try:
@@ -207,25 +206,27 @@ class JenkinsBot(BotPlugin):
         # the grid/channelname to post
         url = incoming_request['build']['full_url']
         m = re.match(r'https://master-(.*).' + os.environ['DOMAIN'], url)
-        grid = '#' + m.group(1) or '#deploy'
-        self.config['GRID_NOTIFICATION'] = ( grid,)
+        grid  = m.group(1)
+        grid_channel = '#' + grid or '#deploy'
+        self.config['GRID_NOTIFICATION'] = ( grid_channel,)
         job_name = incoming_request['name']
         build_number = incoming_request['build']['number']
-        # #############################################
-        # TO DO
-        # rediscover jenkins it might have changed by now
-        ###############################################
+        self.connect_to_jenkins(grid)
+
         build_info = self.jenkins.get_build_info(job_name, build_number)
-        if build_info['actions'][2].get('lastBuiltRevision'):
-            git_commit_id = build_info['actions'][2]['lastBuiltRevision']['SHA1']
-            _url = build_info['actions'][2]['remoteUrls'][0]
-            git_url = 'https://devgit.cloudpassage.com/' + \
-                    _url[_url.find('devgit')+7:].replace('_','/')
-            git_branch = build_info['actions'][2]['lastBuiltRevision']['branch'][0]['name']
-            incoming_request['git'] = {}
-            incoming_request['git']['commit'] = git_commit_id
-            incoming_request['git']['url'] = git_url
-            incoming_request['git']['branch'] = git_branch
+        bi = build_info['actions']
+        for i in range(0, len(bi)):
+            if bi[i].get('lastBuiltRevision') != None:
+                git_commit_id = bi[i]['lastBuiltRevision']['SHA1']
+                _url = bi[i]['remoteUrls'][0]
+                git_url = 'https://devgit.cloudpassage.com/' + \
+                        _url[_url.find('devgit')+7:].replace('_','/')
+                git_branch = bi[i]['lastBuiltRevision']['branch'][0]['name']
+                incoming_request['git'] = {}
+                incoming_request['git']['commit'] = git_commit_id
+                incoming_request['git']['url'] = git_url
+                incoming_request['git']['branch'] = git_branch
+                break
 
         self.broadcast(self.format_notification(incoming_request))
         return
@@ -233,14 +234,14 @@ class JenkinsBot(BotPlugin):
     @botcmd
     def jenkins_list(self, mess, args):
         """List all jobs, optionally filter them using a search term."""
-        self.connect_to_jenkins(mess)
+        self.connect_to_jenkins(mess.frm.channelname)
         return self.format_jobs([job for job in self.jenkins.get_jobs(folder_depth=None)
             if args.lower() in job['fullname'].lower()])
 
     @botcmd
     def jenkins_running(self, mess, args):
         """List all running jobs."""
-        self.connect_to_jenkins(mess)
+        self.connect_to_jenkins(mess.frm.channelname)
 
         jobs = [job for job in self.jenkins.get_jobs()
                 if 'anime' in job['color']]
@@ -252,7 +253,7 @@ class JenkinsBot(BotPlugin):
         if len(args) == 0:
             return 'What Job would you like the parameters for?'
 
-        self.connect_to_jenkins(mess)
+        self.connect_to_jenkins(mess.frm.channelname)
 
         job = self.jenkins.get_job_info(args[0])
         if job['actions'][1] != {}:
@@ -270,7 +271,7 @@ class JenkinsBot(BotPlugin):
         if len(args) == 0:  # No Job name
             return 'What job output would you like?'
 
-        self.connect_to_jenkins(mess)
+        self.connect_to_jenkins(mess.frm.channelname)
         job_name = args[0]
 
         job = self.jenkins.get_job_info(job_name)
@@ -295,7 +296,7 @@ class JenkinsBot(BotPlugin):
         if len(args) < 2:  # No Job name or branch
             return 'missing job name or branch'
 
-        self.connect_to_jenkins(mess)
+        self.connect_to_jenkins(mess.frm.channelname)
         job_name = args[0]
         branch = args[1]
         if not self.jenkins.job_exists(job_name):
@@ -320,7 +321,7 @@ class JenkinsBot(BotPlugin):
         if len(args) == 0:  # No Job name
             return 'What job would you like to build?'
 
-        self.connect_to_jenkins(mess)
+        self.connect_to_jenkins(mess.frm.channelname)
         params = self.build_parameters(args[1:])
 
         # Is it a parameterized job ?
@@ -344,7 +345,7 @@ class JenkinsBot(BotPlugin):
         """Cancel a queued job.
         Example !jenkins unqueue foo
         """
-        self.connect_to_jenkins(mess)
+        self.connect_to_jenkins(mess.frm.channelname)
 
         try:
             queue = self.jenkins.get_queue_info()
@@ -372,7 +373,7 @@ class JenkinsBot(BotPlugin):
             return 'I\'m sorry, I can only create `pipeline` and \
                     `multibranch` jobs.'
 
-        self.connect_to_jenkins(mess)
+        self.connect_to_jenkins(mess.frm.channelname)
 
         try:
             if args[0] == 'pipeline':
@@ -401,7 +402,7 @@ class JenkinsBot(BotPlugin):
         if len(args) < 1:  # No job name
             return 'Oops, I need the name of the job you want me to delete.'
 
-        self.connect_to_jenkins(mess)
+        self.connect_to_jenkins(mess.frm.channelname)
 
         try:
             self.jenkins.delete_job(args[0])
@@ -418,7 +419,7 @@ class JenkinsBot(BotPlugin):
         if len(args) < 1:  # No job name
             return 'Oops, I need the name of the job you want me to enable.'
 
-        self.connect_to_jenkins(mess)
+        self.connect_to_jenkins(mess.frm.channelname)
 
         try:
             self.jenkins.enable_job(args[0])
@@ -435,7 +436,7 @@ class JenkinsBot(BotPlugin):
         if len(args) < 1:  # No job name
             return 'Oops, I need the name of the job you want me to disable.'
 
-        self.connect_to_jenkins(mess)
+        self.connect_to_jenkins(mess.frm.channelname)
 
         try:
             self.jenkins.disable_job(args[0])
@@ -453,7 +454,7 @@ class JenkinsBot(BotPlugin):
         if len(args) < 1:  # No node name
             return 'Oops, I need a name and a working dir for your new node.'
 
-        self.connect_to_jenkins(mess)
+        self.connect_to_jenkins(mess.frm.channelname)
 
         try:
             self.jenkins.create_node(
@@ -476,7 +477,7 @@ class JenkinsBot(BotPlugin):
         if len(args) < 1:  # No node name
             return 'Oops, I need the name of the node you want me to delete.'
 
-        self.connect_to_jenkins(mess)
+        self.connect_to_jenkins(mess.frm.channelname)
 
         try:
             self.jenkins.delete_node(args[0])
@@ -493,7 +494,7 @@ class JenkinsBot(BotPlugin):
         if len(args) < 1:  # No node name
             return 'Oops, I need the name of the node you want me to enable.'
 
-        self.connect_to_jenkins(mess)
+        self.connect_to_jenkins(mess.frm.channelname)
 
         try:
             self.jenkins.enable_node(args[0])
@@ -510,7 +511,7 @@ class JenkinsBot(BotPlugin):
         if len(args) < 1:  # No node name
             return 'Oops, I need the name of the node you want me to disable.'
 
-        self.connect_to_jenkins(mess)
+        self.connect_to_jenkins(mess.frm.channelname)
 
         try:
             self.jenkins.disable_node(args[0])
