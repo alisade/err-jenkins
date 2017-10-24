@@ -340,6 +340,16 @@ class JenkinsBot(BotPlugin):
         """Shortcut for jenkins_build"""
         return self.jenkins_build(mess, args)
 
+    @botcmd(split_args_with=None)
+    def deploy(self, mess, args):
+        """Shortcut for jenkins_build"""
+        return self.jenkins_build(mess, args)
+
+    @botcmd(split_args_with=None)
+    def jenkins_deploy(self, mess, args):
+        """Shortcut for jenkins_build"""
+        return self.jenkins_build(mess, args)
+
     @botcmd
     def jenkins_unqueue(self, msg, args):
         """Cancel a queued job.
