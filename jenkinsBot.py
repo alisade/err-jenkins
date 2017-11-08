@@ -174,14 +174,18 @@ class JenkinsBot(BotPlugin):
                                password=self.config['PASSWORD'])
         return
 
-    def broadcast(self, mess):
+    def broadcast(self, mess, use_card):
         """Shortcut to broadcast a message to all elligible chatrooms."""
         chatrooms = (self.config['CHATROOMS_NOTIFICATION']
                      or self.config['GRID_NOTIFICATION']
                      or self.bot_config.CHATROOM_PRESENCE)
 
         for room in chatrooms:
-            self.send(self.build_identifier(room), mess)
+            if use_card:
+                mess['to'] = self.build_identifier(room)
+                self.send_card(**mess)
+            else:
+                self.send(self.build_identifier(room), mess)
         return
 
     def set_jenkins_url(self, grid):
@@ -228,7 +232,7 @@ class JenkinsBot(BotPlugin):
                 incoming_request['git']['branch'] = git_branch
                 break
 
-        self.broadcast(self.format_notification(incoming_request))
+        self.broadcast(self.format_notification(incoming_request, True), True)
         return
 
     @botcmd
@@ -570,15 +574,32 @@ Parameter Name: {{p.name}}
         return PARAM_TEMPLATE.render({'params': job})
 
     @staticmethod
-    def format_notification(body):
+    def format_notification(body, use_card):
         body['fullname'] = body.get('fullname', body['name'])
-        NOTIFICATION_TEMPLATE = Template("""Build #{{build.number}} \
+        if use_card:
+            COLOR = {
+                'default': 'yellow',
+                'FAILURE': 'red',
+                'SUCCESS': 'green'
+            }
+            build = body['build']
+            git = body.get('git')
+            branch = ', ' + git['branch'] if git else ''
+            card = {
+                'title': git.get('commit', '')[0:6] if git else '',
+                'body': build['phase'] + " " + body['fullname'] + branch + " #" + str(build['number']),
+                'link': git['url'] + '/commit/' + git['commit'] if git else '',
+                'color': COLOR[build.get('status', 'default')],
+            }
+            return card
+        else:
+            NOTIFICATION_TEMPLATE = Template("""Build #{{build.number}} \
 {{build.phase}} {{build.status}} for Job {{fullname}} ({{build.full_url}})
 {% if build.scm %}Based on {{build.scm.url}}/commit/{{build.scm.commit}} \
 ({{build.scm.branch}}){% endif %} \
 {% if git %}Based on {{git.url}}/commit/{{git.commit}} \
 ({{git.branch}}){% endif %}""")
-        return NOTIFICATION_TEMPLATE.render(body)
+            return NOTIFICATION_TEMPLATE.render(body)
 
     @staticmethod
     def build_parameters(params):
