@@ -13,6 +13,7 @@ from jinja2 import Template
 from jenkins import Jenkins, JenkinsException, LAUNCHER_JNLP
 from errbot import BotPlugin, botcmd, webhook
 from errbot import ValidationException
+import time
 
 API_TIMEOUT = 5  # Timeout to connect to the AWS metadata service
 
@@ -192,13 +193,17 @@ class JenkinsBot(BotPlugin):
         """deploy to grid with the same name as the slack channel"""
         domain = os.environ['DOMAIN']
         url = 'http://slave-' + grid + '.' + domain + ':3000/scripts/jenkins_url'
-        try:
-            resp = requests.get(url, timeout=API_TIMEOUT).json()
-        except requests.exceptions.ConnectTimeout:
-            self.log.warning('Connection timeout to Instance API endpoint')
-            return None
-        else:
-            self.config['URL'] = 'http://' + resp['stdout'][0]
+        for i in range(0,4):
+            try:
+                resp = requests.get(url, timeout=API_TIMEOUT).json()
+            except requests.exceptions.ConnectTimeout:
+                self.log.warning('Connection timeout to Instance API endpoint')
+                self.config['URL'] = None
+                time.sleep(5)
+                continue
+            else:
+                self.config['URL'] = 'http://' + resp['stdout'][0]
+                break
 
     @webhook(r'/jenkins/notification')
     def handle_notification(self, incoming_request):
