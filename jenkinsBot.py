@@ -197,7 +197,7 @@ class JenkinsBot(BotPlugin):
             try:
                 resp = requests.get(url, timeout=API_TIMEOUT).json()
             #except requests.exceptions.ConnectTimeout:
-            except Exception, e:
+            except Exception as e:
                 self.log.warning('Connection timeout to Instance API endpoint: ' + str(e))
                 self.config['URL'] = None
                 time.sleep(5)
