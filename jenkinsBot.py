@@ -193,7 +193,7 @@ class JenkinsBot(BotPlugin):
         """deploy to grid with the same name as the slack channel"""
         domain = os.environ['DOMAIN']
         url = 'http://slave-' + grid + '.' + domain + ':3000/scripts/jenkins_url'
-        for i in range(0,4):
+        for i in range(0,30):
             try:
                 resp = requests.get(url, timeout=API_TIMEOUT).json()
                 regex = r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}"
