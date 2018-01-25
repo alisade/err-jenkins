@@ -13,7 +13,7 @@ from jinja2 import Template
 from jenkins import Jenkins, JenkinsException, LAUNCHER_JNLP
 from errbot import BotPlugin, botcmd, webhook
 from errbot import ValidationException
-import time
+from time import sleep
 
 API_TIMEOUT = 5  # Timeout to connect to the AWS metadata service
 
@@ -199,12 +199,12 @@ class JenkinsBot(BotPlugin):
                 regex = r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}"
                 if re.match(regex, resp['stdout'][0]) is None:
                     self.config['URL'] = None
-                    time.sleep(5)
+                    sleep(1)
                     continue
             except requests.ConnectionError as e:
                 self.log.warning('Connection timeout to Instance API endpoint: ' + str(e))
                 self.config['URL'] = None
-                time.sleep(5)
+                sleep(1)
                 continue
             else:
                 self.config['URL'] = 'http://' + resp['stdout'][0]
