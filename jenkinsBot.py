@@ -1,4 +1,4 @@
-grid# coding: utf-8
+# coding: utf-8
 from __future__ import (absolute_import, division,
                         print_function, unicode_literals)
 from xml.etree import ElementTree as et
@@ -166,8 +166,8 @@ class JenkinsBot(BotPlugin):
         return
 
     def connect_to_jenkins(self, grid):
-        """Connect to a Jenkins instance using configuration."""
         self.set_jenkins_url(grid)
+        """Connect to a Jenkins instance using configuration."""
         self.log.debug('Connecting to Jenkins ({0})'.format(
                         self.config['URL'][grid]))
         self.jenkins[grid] = Jenkins(url=self.config['URL'][grid],
@@ -313,7 +313,7 @@ class JenkinsBot(BotPlugin):
         """ set a job git branch/commit id"""
         if len(args) < 2:  # No Job name or branch
             return 'missing job name or branch'
-        
+
         grid = mess.frm.channelname
         self.connect_to_jenkins(grid)
         job_name = args[0]
@@ -402,7 +402,7 @@ class JenkinsBot(BotPlugin):
         if args[0] not in ('pipeline', 'multibranch'):
             return 'I\'m sorry, I can only create `pipeline` and \
                     `multibranch` jobs.'
-        
+
         grid = mess.frm.channelname
         self.connect_to_jenkins(grid)
 
@@ -432,7 +432,7 @@ class JenkinsBot(BotPlugin):
         """
         if len(args) < 1:  # No job name
             return 'Oops, I need the name of the job you want me to delete.'
-        
+
         grid = mess.frm.channelname
         self.connect_to_jenkins(grid)
 
@@ -450,7 +450,7 @@ class JenkinsBot(BotPlugin):
         """
         if len(args) < 1:  # No job name
             return 'Oops, I need the name of the job you want me to enable.'
-        
+
         grid = mess.frm.channelname
         self.connect_to_jenkins(grid)
 
@@ -468,7 +468,7 @@ class JenkinsBot(BotPlugin):
         """
         if len(args) < 1:  # No job name
             return 'Oops, I need the name of the job you want me to disable.'
-        
+
         grid = mess.frm.channelname
         self.connect_to_jenkins(grid)
 
@@ -487,7 +487,7 @@ class JenkinsBot(BotPlugin):
         """
         if len(args) < 1:  # No node name
             return 'Oops, I need a name and a working dir for your new node.'
-        
+
         grid = mess.frm.channelname
         self.connect_to_jenkins(grid)
 
@@ -511,7 +511,7 @@ class JenkinsBot(BotPlugin):
         """
         if len(args) < 1:  # No node name
             return 'Oops, I need the name of the node you want me to delete.'
-        
+
         grid = mess.frm.channelname
         self.connect_to_jenkins(grid)
 
@@ -529,7 +529,7 @@ class JenkinsBot(BotPlugin):
         """
         if len(args) < 1:  # No node name
             return 'Oops, I need the name of the node you want me to enable.'
-        
+
         grid = mess.frm.channelname
         self.connect_to_jenkins(grid)
 
@@ -547,7 +547,7 @@ class JenkinsBot(BotPlugin):
         """
         if len(args) < 1:  # No node name
             return 'Oops, I need the name of the node you want me to disable.'
-        
+
         grid = mess.frm.channelname
         self.connect_to_jenkins(grid)
 
