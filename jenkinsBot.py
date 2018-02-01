@@ -1,4 +1,4 @@
-# coding: utf-8
+grid# coding: utf-8
 from __future__ import (absolute_import, division,
                         print_function, unicode_literals)
 from xml.etree import ElementTree as et
@@ -21,7 +21,7 @@ try:
     from config import JENKINS_URL, JENKINS_USERNAME, JENKINS_PASSWORD
 except ImportError:
     # Default mandatory configuration
-    JENKINS_URL = ''
+    JENKINS_URL = {}
     JENKINS_USERNAME = None
     JENKINS_PASSWORD = None
 
@@ -32,7 +32,6 @@ except ImportError:
     # Default optional configuration
     JENKINS_RECEIVE_NOTIFICATION = True
     JENKINS_CHATROOMS_NOTIFICATION = ()
-
 
 CONFIG_TEMPLATE = {
     'URL': JENKINS_URL,
@@ -148,6 +147,7 @@ class JenkinsBot(BotPlugin):
                                 configuration.items()))
         else:
             config = CONFIG_TEMPLATE
+        self.jenkins = {}
         super(JenkinsBot, self).configure(config)
         return
 
@@ -166,13 +166,13 @@ class JenkinsBot(BotPlugin):
         return
 
     def connect_to_jenkins(self, grid):
-        self.set_jenkins_url(grid)
         """Connect to a Jenkins instance using configuration."""
+        self.set_jenkins_url(grid)
         self.log.debug('Connecting to Jenkins ({0})'.format(
-            self.config['URL']))
-        self.jenkins = Jenkins(url=self.config['URL'],
-                               username=self.config['USERNAME'],
-                               password=self.config['PASSWORD'])
+                        self.config['URL'][grid]))
+        self.jenkins[grid] = Jenkins(url=self.config['URL'][grid],
+                                    username=self.config['USERNAME'],
+                                    password=self.config['PASSWORD'])
         return
 
     def broadcast(self, mess, use_card):
@@ -193,21 +193,21 @@ class JenkinsBot(BotPlugin):
         """deploy to grid with the same name as the slack channel"""
         domain = os.environ['DOMAIN']
         url = 'http://slave-' + grid + '.' + domain + ':3000/scripts/jenkins_url'
-        for i in range(0,30):
+        for i in range(0,29):
             try:
                 resp = requests.get(url, timeout=API_TIMEOUT).json()
                 regex = r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}"
                 if re.match(regex, resp['stdout'][0]) is None:
-                    self.config['URL'] = None
+                    self.config['URL'][grid] = None
                     sleep(1)
                     continue
             except requests.ConnectionError as e:
                 self.log.warning('Connection timeout to Instance API endpoint: ' + str(e))
-                self.config['URL'] = None
+                self.config['URL'][grid] = None
                 sleep(1)
                 continue
             else:
-                self.config['URL'] = 'http://' + resp['stdout'][0]
+                self.config['URL'][grid] = 'http://' + resp['stdout'][0]
                 break
 
     @webhook(r'/jenkins/notification')
@@ -227,7 +227,7 @@ class JenkinsBot(BotPlugin):
         build_number = incoming_request['build']['number']
         self.connect_to_jenkins(grid)
 
-        build_info = self.jenkins.get_build_info(job_name, build_number)
+        build_info = self.jenkins[grid].get_build_info(job_name, build_number)
         bi = build_info['actions']
         for i in range(0, len(bi)):
             if bi[i].get('lastBuiltRevision') != None:
@@ -248,18 +248,20 @@ class JenkinsBot(BotPlugin):
     @botcmd
     def jenkins_list(self, mess, args):
         """List all jobs, optionally filter them using a search term."""
-        self.connect_to_jenkins(mess.frm.channelname)
-        return self.format_jobs([job for job in self.jenkins.get_jobs(folder_depth=None)
+        grid = mess.frm.channelname
+        self.connect_to_jenkins(grid)
+        return self.format_jobs([job for job in self.jenkins[grid].get_jobs(folder_depth=None)
             if args.lower() in job['fullname'].lower()])
 
     @botcmd
     def jenkins_running(self, mess, args):
         """List all running jobs."""
-        self.connect_to_jenkins(mess.frm.channelname)
+        grid = mess.frm.channelname
+        self.connect_to_jenkins(grid)
 
-        jobs = [job for job in self.jenkins.get_jobs()
+        jobs = [job for job in self.jenkins[grid].get_jobs()
                 if 'anime' in job['color']]
-        return self.format_running_jobs(jobs)
+        return self.format_running_jobs(grid, jobs)
 
     @botcmd(split_args_with=None)
     def jenkins_param(self, mess, args):
@@ -267,9 +269,10 @@ class JenkinsBot(BotPlugin):
         if len(args) == 0:
             return 'What Job would you like the parameters for?'
 
-        self.connect_to_jenkins(mess.frm.channelname)
+        grid = mess.frm.channelname
+        self.connect_to_jenkins(grid)
 
-        job = self.jenkins.get_job_info(args[0])
+        job = self.jenkins[grid].get_job_info(args[0])
         if job['actions'][1] != {}:
             job_param = job['actions'][1]['parameterDefinitions']
         elif job['actions'][0] != {}:
@@ -285,17 +288,18 @@ class JenkinsBot(BotPlugin):
         if len(args) == 0:  # No Job name
             return 'What job output would you like?'
 
-        self.connect_to_jenkins(mess.frm.channelname)
+        grid = mess.frm.channelname
+        self.connect_to_jenkins(grid)
         job_name = args[0]
 
-        job = self.jenkins.get_job_info(job_name)
+        job = self.jenkins[grid].get_job_info(job_name)
         if job['builds']:
             last_run_number = job['builds'][0]['number']
         else:
             return 'job has not been build yet!'
 
         try:
-            console_output = self.jenkins.get_build_console_output(job_name, last_run_number)
+            console_output = self.jenkins[grid].get_build_console_output(job_name, last_run_number)
         except:
             return 'could not connect to jenkins'
         else:
@@ -309,19 +313,20 @@ class JenkinsBot(BotPlugin):
         """ set a job git branch/commit id"""
         if len(args) < 2:  # No Job name or branch
             return 'missing job name or branch'
-
-        self.connect_to_jenkins(mess.frm.channelname)
+        
+        grid = mess.frm.channelname
+        self.connect_to_jenkins(grid)
         job_name = args[0]
         branch = args[1]
-        if not self.jenkins.job_exists(job_name):
+        if not self.jenkins[grid].job_exists(job_name):
             return 'job name is invalid'
 
-        job_xml = self.jenkins.get_job_config(job_name)
+        job_xml = self.jenkins[grid].get_job_config(job_name)
         tree = et.fromstring(job_xml)
         tree.find('.//hudson.plugins.git.BranchSpec/name').text = branch
         new_job_xml = et.tostring(tree, encoding='utf-8')
         try:
-            self.jenkins.reconfig_job(job_name, new_job_xml.decode('utf-8'))
+            self.jenkins[grid].reconfig_job(job_name, new_job_xml.decode('utf-8'))
         except:
             return 'failed to change the job build branch'
 
@@ -334,18 +339,18 @@ class JenkinsBot(BotPlugin):
         """
         if len(args) == 0:  # No Job name
             return 'What job would you like to build?'
-
-        self.connect_to_jenkins(mess.frm.channelname)
+        grid = mess.frm.channelname
+        self.connect_to_jenkins(grid)
         params = self.build_parameters(args[1:])
 
         # Is it a parameterized job ?
-        job = self.jenkins.get_job_info(args[0])
+        job = self.jenkins[grid].get_job_info(args[0])
         if job['actions'][0] == {} and job['actions'][1] == {}:
-            self.jenkins.build_job(args[0])
+            self.jenkins[grid].build_job(args[0])
         else:
-            self.jenkins.build_job(args[0], params)
+            self.jenkins[grid].build_job(args[0], params)
 
-        running_job = self.search_job(args[0])
+        running_job = self.search_job(grid, args[0])
         return 'Your job should begin shortly: {0}'.format(
             self.format_jobs(running_job))
 
@@ -369,15 +374,16 @@ class JenkinsBot(BotPlugin):
         """Cancel a queued job.
         Example !jenkins unqueue foo
         """
-        self.connect_to_jenkins(mess.frm.channelname)
+        grid = mess.frm.channelname
+        self.connect_to_jenkins(grid)
 
         try:
-            queue = self.jenkins.get_queue_info()
+            queue = self.jenkins[grid].get_queue_info()
 
             job = next((job for job in queue if job['task']['name'].lower() == args.lower()), None)
 
             if job:
-                self.jenkins.cancel_queue(job['id'])
+                self.jenkins[grid].cancel_queue(job['id'])
                 return 'Unqueued job {0}'.format(job['task']['name'])
             else:
                 return 'Could not find job {0}, but found the following: {1}'.format(
@@ -396,19 +402,20 @@ class JenkinsBot(BotPlugin):
         if args[0] not in ('pipeline', 'multibranch'):
             return 'I\'m sorry, I can only create `pipeline` and \
                     `multibranch` jobs.'
-
-        self.connect_to_jenkins(mess.frm.channelname)
+        
+        grid = mess.frm.channelname
+        self.connect_to_jenkins(grid)
 
         try:
             if args[0] == 'pipeline':
-                self.jenkins.create_job(
+                self.jenkins[grid].create_job(
                     args[1],
                     JENKINS_JOB_TEMPLATE_PIPELINE.format(repository=args[2]))
 
             elif args[0] == 'multibranch':
                 repository = args[2].rsplit('/', maxsplit=2)[-2:]
 
-                self.jenkins.create_job(
+                self.jenkins[grid].create_job(
                     args[1],
                     JENKINS_JOB_TEMPLATE_MULTIBRANCH.format(
                         repo_owner=repository[0].split(':')[-1],
@@ -416,7 +423,7 @@ class JenkinsBot(BotPlugin):
         except JenkinsException as e:
             return 'Oops, {0}'.format(e)
         return 'Your job has been created: {0}/job/{1}'.format(
-            self.config['URL'], args[1])
+            self.config['URL'][grid], args[1])
 
     @botcmd(split_args_with=None)
     def jenkins_deletejob(self, mess, args):
@@ -425,11 +432,12 @@ class JenkinsBot(BotPlugin):
         """
         if len(args) < 1:  # No job name
             return 'Oops, I need the name of the job you want me to delete.'
-
-        self.connect_to_jenkins(mess.frm.channelname)
+        
+        grid = mess.frm.channelname
+        self.connect_to_jenkins(grid)
 
         try:
-            self.jenkins.delete_job(args[0])
+            self.jenkins[grid].delete_job(args[0])
         except JenkinsException as e:
             return 'Oops, {0}'.format(e)
 
@@ -442,11 +450,12 @@ class JenkinsBot(BotPlugin):
         """
         if len(args) < 1:  # No job name
             return 'Oops, I need the name of the job you want me to enable.'
-
-        self.connect_to_jenkins(mess.frm.channelname)
+        
+        grid = mess.frm.channelname
+        self.connect_to_jenkins(grid)
 
         try:
-            self.jenkins.enable_job(args[0])
+            self.jenkins[grid].enable_job(args[0])
         except JenkinsException as e:
             return 'Oops, {0}'.format(e)
 
@@ -459,11 +468,12 @@ class JenkinsBot(BotPlugin):
         """
         if len(args) < 1:  # No job name
             return 'Oops, I need the name of the job you want me to disable.'
-
-        self.connect_to_jenkins(mess.frm.channelname)
+        
+        grid = mess.frm.channelname
+        self.connect_to_jenkins(grid)
 
         try:
-            self.jenkins.disable_job(args[0])
+            self.jenkins[grid].disable_job(args[0])
         except JenkinsException as e:
             return 'Oops, {0}'.format(e)
 
@@ -477,11 +487,12 @@ class JenkinsBot(BotPlugin):
         """
         if len(args) < 1:  # No node name
             return 'Oops, I need a name and a working dir for your new node.'
-
-        self.connect_to_jenkins(mess.frm.channelname)
+        
+        grid = mess.frm.channelname
+        self.connect_to_jenkins(grid)
 
         try:
-            self.jenkins.create_node(
+            self.jenkins[grid].create_node(
                 name=args[0],
                 remoteFS=args[1],
                 labels=' '.join(args[2:]),
@@ -491,7 +502,7 @@ class JenkinsBot(BotPlugin):
             return 'Oops, {0}'.format(e)
 
         return 'Your node has been created: {0}/computer/{1}'.format(
-            self.config['URL'], args[0])
+            self.config['URL'][grid], args[0])
 
     @botcmd(split_args_with=None)
     def jenkins_deletenode(self, mess, args):
@@ -500,11 +511,12 @@ class JenkinsBot(BotPlugin):
         """
         if len(args) < 1:  # No node name
             return 'Oops, I need the name of the node you want me to delete.'
-
-        self.connect_to_jenkins(mess.frm.channelname)
+        
+        grid = mess.frm.channelname
+        self.connect_to_jenkins(grid)
 
         try:
-            self.jenkins.delete_node(args[0])
+            self.jenkins[grid].delete_node(args[0])
         except JenkinsException as e:
             return 'Oops, {0}'.format(e)
 
@@ -517,11 +529,12 @@ class JenkinsBot(BotPlugin):
         """
         if len(args) < 1:  # No node name
             return 'Oops, I need the name of the node you want me to enable.'
-
-        self.connect_to_jenkins(mess.frm.channelname)
+        
+        grid = mess.frm.channelname
+        self.connect_to_jenkins(grid)
 
         try:
-            self.jenkins.enable_node(args[0])
+            self.jenkins[grid].enable_node(args[0])
         except JenkinsException as e:
             return 'Oops, {0}'.format(e)
 
@@ -534,32 +547,32 @@ class JenkinsBot(BotPlugin):
         """
         if len(args) < 1:  # No node name
             return 'Oops, I need the name of the node you want me to disable.'
-
-        self.connect_to_jenkins(mess.frm.channelname)
+        
+        grid = mess.frm.channelname
+        self.connect_to_jenkins(grid)
 
         try:
-            self.jenkins.disable_node(args[0])
+            self.jenkins[grid].disable_node(args[0])
         except JenkinsException as e:
             return 'Oops, {0}'.format(e)
 
         return 'Your node has been disabled.'
 
-    def search_job(self, search_term):
+    def search_job(self, grid, search_term):
         self.log.debug('Querying Jenkins for job "{0}"'.format(search_term))
-        return [job for job in self.jenkins.get_jobs(folder_depth=None)
+        return [job for job in self.jenkins[grid].get_jobs(folder_depth=None)
                 if search_term.lower() == job['fullname'].lower()]
 
-    def format_running_jobs(self, jobs):
+    def format_running_jobs(self, grid, jobs):
         if len(jobs) == 0:
             return 'No running jobs.'
 
-        jobs_info = [self.jenkins.get_job_info(job['name']) for job in jobs]
+        jobs_info = [self.jenkins[grid].get_job_info(job['name']) for job in jobs]
         return '\n\n'.join(['%s (%s)\n%s' % (
             job['name'],
             job['lastBuild']['url'],
             job['healthReport'][0]['description'])
                             for job in jobs_info]).strip()
-
     @staticmethod
     def format_jobs(jobs):
         if len(jobs) == 0:
