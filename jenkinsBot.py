@@ -8,6 +8,7 @@ import re
 import os
 from itertools import chain
 import requests
+from dns.resolver import query, NXDOMAIN
 
 from jinja2 import Template
 from jenkins import Jenkins, JenkinsException, LAUNCHER_JNLP
@@ -192,7 +193,15 @@ class JenkinsBot(BotPlugin):
     def set_jenkins_url(self, grid):
         """deploy to grid with the same name as the slack channel"""
         domain = os.environ['DOMAIN']
-        url = 'http://slave-' + grid + '.' + domain + ':3000/scripts/jenkins_url'
+        server = 'master-{0}-alb.{1}'.format(grid, domain)
+        try:
+            answers = query(server, 'A')
+        except NXDOMAIN as e:
+            self.log.debug('New instance api endpoint not supported: ' + str(e))
+            url = 'http://slave-{0}.{1}:3000/scripts/jenkins_url'.format(grid, domain)
+        else:
+            url = 'https://{}:3000/scripts/jenkins_url'.format(server)
+
         for i in range(0,29):
             try:
                 resp = requests.get(url, timeout=API_TIMEOUT).json()
