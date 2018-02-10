@@ -1,2 +1,3 @@
 python-jenkins
 validators
+dnspython
