@@ -619,7 +619,7 @@ Parameter Name: {{p.name}}
             branch = ', ' + git['branch'] if git else ''
             card = {
                 'title': git.get('commit', '')[0:6] if git else '',
-                'body': build['phase'] + " " + body['fullname'] + branch + " #" + str(build['number']),
+                'body': build.get('status','') + ' ' + build['phase'] + " " + body['fullname'] + branch + " #" + str(build['number']),
                 'link': git['url'] + '/commit/' + git['commit'] if git else '',
                 'color': COLOR[build.get('status', 'default')],
             }
